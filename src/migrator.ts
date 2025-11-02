@@ -122,42 +122,31 @@ export class AsanaToGiteaMigrator {
 
     console.debug(`Project: ${projectName} (${tasks.length} tasks)`);
 
-    // Try to create project board (may not be supported in all Gitea versions)
+    // Find existing project by name or create new one
+    let projectId: number | undefined;
     try {
-      const project = await this.client.createProject({
-        title: projectName,
-        body: `Migrated from Asana export: ${path.basename(filePath)}`,
-      });
-      console.debug(`Created project board: ${project.title}`);
+      const projects = await this.client.getProjects();
+      const existingProject = projects.find((p) => p.title === projectName);
+
+      if (existingProject) {
+        projectId = existingProject.id;
+        console.debug(`Using existing project: ${existingProject.title} (ID: ${projectId})`);
+      } else {
+        const project = await this.client.createProject({
+          title: projectName,
+          body: `Migrated from Asana export: ${path.basename(filePath)}`,
+        });
+        projectId = project.id;
+        console.debug(`Created new project: ${project.title} (ID: ${projectId})`);
+      }
     } catch (error) {
-      console.debug(
-        `Note: Could not create project board (may not be supported). Issues will be labeled with project name.`
-      );
+      console.error(`Failed to get/create project:`, error);
+      console.debug(`Will create issues without project assignment`);
     }
 
     // Group tasks by section
     const tasksBySection = groupTasksBySection(tasks);
     console.debug(`Found ${tasksBySection.size} sections`);
-
-    // Create labels for each section and for the project
-    const sectionLabels = new Map<string, number>();
-    let projectLabelId: number | undefined;
-
-    // Get or create project label
-    try {
-      projectLabelId = await this.createSectionLabel(`Project: ${projectName}`);
-    } catch (error) {
-      console.debug(`Could not create project label`);
-    }
-
-    for (const sectionName of tasksBySection.keys()) {
-      try {
-        const labelId = await this.createSectionLabel(sectionName);
-        sectionLabels.set(sectionName, labelId);
-      } catch (error) {
-        console.error(`Failed to create section label:`, error);
-      }
-    }
 
     // Migrate tasks as issues
     let successCount = 0;
@@ -170,17 +159,9 @@ export class AsanaToGiteaMigrator {
         try {
           const issueRequest = convertTaskToIssue(task, this.config.userMappings);
 
-          // Add section label and project label
-          const labels: number[] = [];
-          const sectionLabelId = sectionLabels.get(sectionName);
-          if (sectionLabelId) {
-            labels.push(sectionLabelId);
-          }
-          if (projectLabelId) {
-            labels.push(projectLabelId);
-          }
-          if (labels.length > 0) {
-            issueRequest.labels = labels;
+          // Assign to project board
+          if (projectId) {
+            issueRequest.project = projectId;
           }
 
           const issue = await this.client.createIssue(issueRequest);
