@@ -85,15 +85,25 @@ The tool uses environment variables for configuration (via `.env` file):
 - **GITEA_OWNER**: Repository owner/organization (defaults to `your-org`)
 - **GITEA_REPO**: Repository name (defaults to `your-repo`)
 
-**User Mappings**: Edit `src/utils/user-mapping.ts` to map your team's Asana emails to Gitea usernames:
+**User Mappings**: Create `usermapping.json` from the example template:
 
-```typescript
-export function getDefaultUserMappings(): UserMapping[] {
-  return [
-    { asanaEmail: "user@asana.com", giteaEmail: "user@gitea.com" },
-    // Add your team's mappings here
-  ];
-}
+```bash
+cp usermapping.example.json usermapping.json
+```
+
+Then edit `usermapping.json` to map your team's Asana emails to Gitea usernames:
+
+```json
+[
+  {
+    "asanaEmail": "user@asana.com",
+    "giteaEmail": "user@gitea.com"
+  },
+  {
+    "asanaEmail": "another@asana.com",
+    "giteaEmail": "another@gitea.com"
+  }
+]
 ```
 
 ### Running the Migration

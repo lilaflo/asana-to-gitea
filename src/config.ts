@@ -5,7 +5,7 @@ import * as path from "path";
 /**
  * Load configuration from environment variables
  */
-export function loadConfig(): Config {
+export async function loadConfig(): Promise<Config> {
   const giteaToken = process.env.GITEA_TOKEN;
 
   if (!giteaToken) {
@@ -19,7 +19,7 @@ export function loadConfig(): Config {
     giteaToken,
     repoOwner: process.env.GITEA_OWNER || "your-org",
     repoName: process.env.GITEA_REPO || "your-repo",
-    userMappings: getDefaultUserMappings(),
+    userMappings: await getDefaultUserMappings(),
     exportsDir: path.join(process.cwd(), "exports"),
   };
 }

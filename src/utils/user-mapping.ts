@@ -1,5 +1,6 @@
 import type { UserMapping } from "../types/config.ts";
 import type { AsanaUser } from "../types/asana.ts";
+import * as path from "path";
 
 /**
  * Maps an Asana user email to a Gitea user email
@@ -27,18 +28,26 @@ export function mapAsanaUserToGitea(
 }
 
 /**
- * Gets the default user mappings
- * Customize this for your team's email mappings
+ * Loads user mappings from JSON file
+ * @param filePath Path to the user mapping JSON file
  */
-export function getDefaultUserMappings(): UserMapping[] {
-  return [
-    {
-      asanaEmail: "florian@fontrocker.com",
-      giteaEmail: "gitea@lale.li",
-    },
-    {
-      asanaEmail: "tommy@fontrocker.com",
-      giteaEmail: "tommy@fontrocker.com",
-    },
-  ];
+export async function loadUserMappings(filePath: string): Promise<UserMapping[]> {
+  try {
+    const file = Bun.file(filePath);
+    if (!(await file.exists())) {
+      throw new Error(`User mapping file not found: ${filePath}`);
+    }
+    const mappings = await file.json();
+    return mappings as UserMapping[];
+  } catch (error) {
+    throw new Error(`Failed to load user mappings from ${filePath}: ${error}`);
+  }
+}
+
+/**
+ * Gets the default user mappings from usermapping.json
+ */
+export async function getDefaultUserMappings(): Promise<UserMapping[]> {
+  const mappingFile = path.join(process.cwd(), "usermapping.json");
+  return loadUserMappings(mappingFile);
 }

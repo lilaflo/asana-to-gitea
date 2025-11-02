@@ -1,12 +1,14 @@
 import { describe, test, expect } from "bun:test";
 import { convertTaskToIssue, groupTasksBySection } from "./task-converter.ts";
 import type { AsanaTask } from "../types/asana.ts";
-import { getDefaultUserMappings } from "./user-mapping.ts";
+import { loadUserMappings } from "./user-mapping.ts";
+import * as path from "path";
 
 describe("convertTaskToIssue", () => {
-  const userMappings = getDefaultUserMappings();
-
-  test("should convert a basic task", () => {
+  test("should convert a basic task", async () => {
+    const userMappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
     const task: AsanaTask = {
       gid: "123",
       name: "Test Task",
@@ -19,7 +21,7 @@ describe("convertTaskToIssue", () => {
       due_at: null,
       assignee: {
         gid: "456",
-        name: "Florian Fackler",
+        name: "User1",
         resource_type: "user",
       },
       assignee_status: "inbox",
@@ -73,14 +75,17 @@ describe("convertTaskToIssue", () => {
     expect(result.title).toBe("Test Task");
     expect(result.body).toContain("This is a test task");
     expect(result.body).toContain("Asana ID");
-    expect(result.body).toContain("Florian Fackler");
+    expect(result.body).toContain("User1");
     expect(result.body).toContain("In Progress");
     expect(result.closed).toBe(false);
-    expect(result.assignees).toEqual(["gitea@lale.li"]);
+    expect(result.assignees).toEqual(["user1@gitea.com"]);
     expect(result.due_date).toBe("2025-12-31T23:59:59Z");
   });
 
-  test("should handle completed tasks", () => {
+  test("should handle completed tasks", async () => {
+    const userMappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
     const task: AsanaTask = {
       gid: "123",
       name: "Completed Task",

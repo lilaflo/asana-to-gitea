@@ -8,7 +8,7 @@ async function main() {
 
   try {
     // Load configuration
-    const config = loadConfig();
+    const config = await loadConfig();
     console.debug(`Target: ${config.giteaUrl}/${config.repoOwner}/${config.repoName}`);
     console.debug(`Exports directory: ${config.exportsDir}\n`);
 

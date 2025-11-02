@@ -1,38 +1,49 @@
 import { describe, test, expect } from "bun:test";
-import { mapAsanaUserToGitea, getDefaultUserMappings } from "./user-mapping.ts";
+import { mapAsanaUserToGitea, loadUserMappings } from "./user-mapping.ts";
 import type { AsanaUser } from "../types/asana.ts";
+import * as path from "path";
 
 describe("mapAsanaUserToGitea", () => {
-  const mappings = getDefaultUserMappings();
-
-  test("should map florian correctly", () => {
+  test("should map user1 correctly", async () => {
+    const mappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
     const asanaUser: AsanaUser = {
       gid: "123",
-      name: "Florian Fackler",
+      name: "User1",
       resource_type: "user",
     };
 
     const result = mapAsanaUserToGitea(asanaUser, mappings);
-    expect(result).toBe("gitea@lale.li");
+    expect(result).toBe("user1@gitea.com");
   });
 
-  test("should map tommy correctly", () => {
+  test("should map user2 correctly", async () => {
+    const mappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
     const asanaUser: AsanaUser = {
       gid: "456",
-      name: "Tommy",
+      name: "User2",
       resource_type: "user",
     };
 
     const result = mapAsanaUserToGitea(asanaUser, mappings);
-    expect(result).toBe("tommy@fontrocker.com");
+    expect(result).toBe("user2@gitea.com");
   });
 
-  test("should return undefined for null user", () => {
+  test("should return undefined for null user", async () => {
+    const mappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
     const result = mapAsanaUserToGitea(null, mappings);
     expect(result).toBeUndefined();
   });
 
-  test("should return undefined for unmapped user", () => {
+  test("should return undefined for unmapped user", async () => {
+    const mappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
     const asanaUser: AsanaUser = {
       gid: "789",
       name: "Unknown User",
@@ -44,18 +55,20 @@ describe("mapAsanaUserToGitea", () => {
   });
 });
 
-describe("getDefaultUserMappings", () => {
-  test("should return correct default mappings", () => {
-    const mappings = getDefaultUserMappings();
+describe("loadUserMappings", () => {
+  test("should load mappings from example file", async () => {
+    const mappings = await loadUserMappings(
+      path.join(process.cwd(), "usermapping.example.json")
+    );
 
     expect(mappings).toHaveLength(2);
     expect(mappings[0]).toEqual({
-      asanaEmail: "florian@fontrocker.com",
-      giteaEmail: "gitea@lale.li",
+      asanaEmail: "user1@asana.com",
+      giteaEmail: "user1@gitea.com",
     });
     expect(mappings[1]).toEqual({
-      asanaEmail: "tommy@fontrocker.com",
-      giteaEmail: "tommy@fontrocker.com",
+      asanaEmail: "user2@asana.com",
+      giteaEmail: "user2@gitea.com",
     });
   });
 });
