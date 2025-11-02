@@ -19,7 +19,7 @@ describe("convertTaskToIssue", () => {
       due_at: null,
       assignee: {
         gid: "456",
-        name: "User1 Name",
+        name: "Florian Fackler",
         resource_type: "user",
       },
       assignee_status: "inbox",
@@ -73,10 +73,10 @@ describe("convertTaskToIssue", () => {
     expect(result.title).toBe("Test Task");
     expect(result.body).toContain("This is a test task");
     expect(result.body).toContain("Asana ID");
-    expect(result.body).toContain("User1 Name");
+    expect(result.body).toContain("Florian Fackler");
     expect(result.body).toContain("In Progress");
     expect(result.closed).toBe(false);
-    expect(result.assignees).toEqual(["user1@gitea.com"]);
+    expect(result.assignees).toEqual(["gitea@lale.li"]);
     expect(result.due_date).toBe("2025-12-31T23:59:59Z");
   });
 

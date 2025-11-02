@@ -33,12 +33,12 @@ export function mapAsanaUserToGitea(
 export function getDefaultUserMappings(): UserMapping[] {
   return [
     {
-      asanaEmail: "user1@asana.com",
-      giteaEmail: "user1@gitea.com",
+      asanaEmail: "florian@fontrocker.com",
+      giteaEmail: "gitea@lale.li",
     },
     {
-      asanaEmail: "user2@asana.com",
-      giteaEmail: "user2@gitea.com",
+      asanaEmail: "tommy@fontrocker.com",
+      giteaEmail: "tommy@fontrocker.com",
     },
   ];
 }

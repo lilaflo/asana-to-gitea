@@ -122,7 +122,7 @@ export class AsanaToGiteaMigrator {
 
     console.debug(`Project: ${projectName} (${tasks.length} tasks)`);
 
-    // Create project board
+    // Try to create project board (may not be supported in all Gitea versions)
     try {
       const project = await this.client.createProject({
         title: projectName,
@@ -130,15 +130,26 @@ export class AsanaToGiteaMigrator {
       });
       console.debug(`Created project board: ${project.title}`);
     } catch (error) {
-      console.error(`Failed to create project board:`, error);
+      console.debug(
+        `Note: Could not create project board (may not be supported). Issues will be labeled with project name.`
+      );
     }
 
     // Group tasks by section
     const tasksBySection = groupTasksBySection(tasks);
     console.debug(`Found ${tasksBySection.size} sections`);
 
-    // Create labels for each section
+    // Create labels for each section and for the project
     const sectionLabels = new Map<string, number>();
+    let projectLabelId: number | undefined;
+
+    // Get or create project label
+    try {
+      projectLabelId = await this.createSectionLabel(`Project: ${projectName}`);
+    } catch (error) {
+      console.debug(`Could not create project label`);
+    }
+
     for (const sectionName of tasksBySection.keys()) {
       try {
         const labelId = await this.createSectionLabel(sectionName);
@@ -159,10 +170,17 @@ export class AsanaToGiteaMigrator {
         try {
           const issueRequest = convertTaskToIssue(task, this.config.userMappings);
 
-          // Add section label
-          const labelId = sectionLabels.get(sectionName);
-          if (labelId) {
-            issueRequest.labels = [labelId];
+          // Add section label and project label
+          const labels: number[] = [];
+          const sectionLabelId = sectionLabels.get(sectionName);
+          if (sectionLabelId) {
+            labels.push(sectionLabelId);
+          }
+          if (projectLabelId) {
+            labels.push(projectLabelId);
+          }
+          if (labels.length > 0) {
+            issueRequest.labels = labels;
           }
 
           const issue = await this.client.createIssue(issueRequest);
