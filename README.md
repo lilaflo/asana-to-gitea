@@ -61,31 +61,39 @@ For each Asana JSON export file, this tool creates:
 
 4. **Configure environment**
 
-   Set your Gitea API token:
+   Create a `.env` file from the example template:
    ```bash
-   export GITEA_TOKEN="your-gitea-api-token"
+   cp .env.example .env
    ```
+
+   Then edit `.env` and set your configuration:
+   ```env
+   GITEA_TOKEN=your-gitea-api-token
+   GITEA_URL=https://git.example.com
+   GITEA_OWNER=your-org
+   GITEA_REPO=your-repo
+   ```
+
+   Bun automatically loads `.env` files - no additional setup needed!
 
 ### Configuration
 
-Edit `src/config.ts` to customize:
+The tool uses environment variables for configuration (via `.env` file):
 
-- **Gitea URL**: Your Gitea instance URL
-- **Repository**: Target owner and repository name
-- **User Mappings**: Map Asana user emails to Gitea usernames
+- **GITEA_TOKEN**: Your Gitea API token (required)
+- **GITEA_URL**: Your Gitea instance URL (defaults to `https://git.example.com`)
+- **GITEA_OWNER**: Repository owner/organization (defaults to `your-org`)
+- **GITEA_REPO**: Repository name (defaults to `your-repo`)
+
+**User Mappings**: Edit `src/utils/user-mapping.ts` to map your team's Asana emails to Gitea usernames:
 
 ```typescript
-// Example configuration in src/config.ts
-return {
-  giteaUrl: "https://git.example.com",
-  giteaToken,
-  repoOwner: "your-org",
-  repoName: "your-repo",
-  userMappings: [
+export function getDefaultUserMappings(): UserMapping[] {
+  return [
     { asanaEmail: "user@asana.com", giteaEmail: "user@gitea.com" },
-  ],
-  exportsDir: path.join(process.cwd(), "exports"),
-};
+    // Add your team's mappings here
+  ];
+}
 ```
 
 ### Running the Migration
