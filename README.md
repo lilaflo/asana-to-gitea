@@ -148,10 +148,22 @@ asana-to-gitea/
 
 ## 📖 How to Export from Asana
 
-1. Open your Asana project
-2. Click on the project dropdown menu
-3. Select **Export** → **JSON**
-4. Save the file to the `exports/` directory
+Before running the migration, you need to export each Asana project individually:
+
+1. **Navigate to your Asana workspace** and identify all projects you want to migrate
+2. **For each project**:
+   - Open the project in Asana
+   - Click on the project dropdown menu (next to the project name)
+   - Select **Export** → **JSON**
+   - Save the exported JSON file with a descriptive name (e.g., `backend-tasks.json`, `api-development.json`, `qa-testing.json`)
+3. **Move all exported files** to the `exports/` directory in this project
+4. **Verify** that each JSON file represents one complete Asana project
+
+**Important Notes:**
+- Each JSON file will create one separate Gitea project board
+- Use meaningful filenames as they help identify which export corresponds to which project
+- You must export projects one at a time - Asana doesn't support bulk export
+- Ensure all projects are exported before running the migration tool
 
 ## 🤝 Contributing
 
