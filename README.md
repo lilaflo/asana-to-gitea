@@ -42,7 +42,7 @@ For each Asana JSON export file, this tool creates:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/asana-to-gitea.git
+   git clone [https://github.com/yourusername/asana-to-gitea.git](https://github.com/lilaflo/asana-to-gitea)
    cd asana-to-gitea
    ```
 
