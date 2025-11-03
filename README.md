@@ -21,13 +21,17 @@
 
 For each Asana JSON export file, this tool creates:
 
-- ✓ A Gitea project board with the original project name
 - ✓ Issues for each task with full descriptions
-- ✓ Labels for Asana sections (e.g., "In Progress", "Done")
+- ✓ Labels for Asana sections (e.g., "In Progress", "Done") for easy filtering
 - ✓ Task assignees (mapped to Gitea users)
 - ✓ Due dates
 - ✓ Completion status (open/closed)
 - ✓ Original metadata preserved in issue descriptions
+
+**Note on Project Boards**: Gitea 1.24.6 does not have API support for project boards (planned for Gitea 1.26.0). Issues are tagged with section labels, allowing you to:
+1. Filter issues by section label in Gitea
+2. Manually create project boards in the Gitea web UI
+3. Bulk-assign filtered issues to your project boards
 
 ## 🚀 Quick Start
 
@@ -97,14 +101,16 @@ Then edit `usermapping.json` to map your team's Asana emails to Gitea usernames:
 [
   {
     "asanaEmail": "user@asana.com",
-    "giteaEmail": "user@gitea.com"
+    "giteaUsername": "user123"
   },
   {
     "asanaEmail": "another@asana.com",
-    "giteaEmail": "another@gitea.com"
+    "giteaUsername": "another456"
   }
 ]
 ```
+
+**Important**: Use Gitea **usernames** (login names), not email addresses. You can find usernames in your Gitea user profile or collaborators list.
 
 ### Running the Migration
 
@@ -114,9 +120,39 @@ bun start
 ```
 
 The tool will:
-1. Scan the `exports/` directory for JSON files
-2. Create project boards and issues in Gitea
-3. Display progress and summary statistics
+1. Load migration state from previous runs (if any)
+2. Scan the `exports/` directory for JSON files
+3. Check for existing issues in Gitea to prevent duplicates
+4. Create section labels and issues in Gitea
+5. Track migrated tasks in `migration-state.json`
+6. Display progress and summary statistics (created, skipped, failed)
+
+**Re-running the Migration**: It's safe to re-run the migration multiple times. The tool will:
+- Skip tasks that have already been migrated (tracked in `migration-state.json`)
+- Detect existing issues by parsing Asana IDs from issue bodies
+- Only create issues for new or failed tasks
+- Show a count of skipped tasks in the summary
+
+### Post-Migration: Organizing with Project Boards
+
+After migration, organize your issues using Gitea's project boards:
+
+1. **Create a Project Board**:
+   - Go to your repository in Gitea
+   - Navigate to **Projects** tab
+   - Click **New Project** and name it after your Asana project
+
+2. **Filter and Assign Issues**:
+   - Go to **Issues** tab
+   - Use the label filter to show issues from a specific section (e.g., "In Progress")
+   - Select multiple issues using checkboxes
+   - Use the bulk actions menu to assign them to your project board
+
+3. **Organize Columns**:
+   - In your project board, create columns matching your workflow
+   - Drag and drop issues between columns as needed
+
+This two-step approach (automated migration + manual organization) works around Gitea 1.24.6's API limitations while preserving all task metadata.
 
 ## 🛠️ Development
 
@@ -208,8 +244,13 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 - **Dry Run**: Review the console output before the migration completes to ensure everything looks correct
 - **Backup**: Always backup your Gitea instance before running migrations
-- **Rate Limits**: The tool includes 100ms delays between requests - adjust in `src/migrator.ts` if needed
+- **Rate Limits**: The tool includes 100ms delays between requests - adjust in `src/migrator.ts:219` if needed
 - **Large Projects**: For projects with many tasks, consider running during off-peak hours
+- **Section Labels**: Each Asana section becomes a label with a unique color for easy visual identification
+- **Project Board Workflow**: After migration, filter issues by label and bulk-assign them to project boards
+- **Duplicate Prevention**: The tool tracks migrated tasks in `migration-state.json` - keep this file to avoid duplicates
+- **Partial Failures**: If some tasks fail to migrate, simply re-run `bun start` - only failed tasks will be retried
+- **State File**: The `migration-state.json` file is automatically gitignored and should not be committed
 
 ## 📮 Support
 

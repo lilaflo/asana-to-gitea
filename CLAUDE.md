@@ -59,12 +59,15 @@ src/
 ├── types/
 │   ├── asana.ts             # Asana export schema types
 │   ├── gitea.ts             # Gitea API types
-│   └── config.ts            # Configuration types
+│   ├── config.ts            # Configuration types
+│   └── migration.ts         # Migration state types
 ├── gitea/
 │   └── client.ts            # Gitea API client
 └── utils/
     ├── user-mapping.ts      # User mapping utilities
     ├── task-converter.ts    # Task to issue conversion logic
+    ├── migration-state.ts   # Migration state management
+    ├── duplicate-detector.ts # Duplicate detection utilities
     └── *.test.ts            # Unit tests
 ```
 
@@ -72,18 +75,59 @@ src/
 
 ### Migration Flow
 1. **Load Configuration** - Reads `GITEA_TOKEN` from environment and sets up repository target
-2. **Scan Exports** - Finds all JSON files in `exports/` directory
-3. **For Each Export**:
+2. **Load Migration State** - Loads `migration-state.json` to track previously migrated tasks
+3. **Scan Exports** - Finds all JSON files in `exports/` directory
+4. **For Each Export**:
    - Parse Asana tasks from JSON
-   - Create Gitea project board with the project name
-   - Group tasks by section (Asana sections become Gitea labels)
-   - Convert each task to a Gitea issue with:
-     - Original task metadata preserved in issue body
-     - Assignees mapped via user mapping table
-     - Completion status as open/closed state
-     - Due dates preserved
-     - Section as label
-4. **Rate Limiting** - 100ms delay between issue creation to avoid API throttling
+   - Fetch all existing Gitea issues and build set of Asana IDs (duplicate detection)
+   - Group tasks by section
+   - Create section labels in Gitea (with color-coded identification)
+   - **For each task**:
+     - Check migration state file (fast check)
+     - Check existing Gitea issues by parsing bodies for Asana IDs (reliable check)
+     - Skip if already migrated
+     - Otherwise, convert task to Gitea issue with:
+       - Original task metadata preserved in issue body (including Asana ID)
+       - Assignees mapped via user mapping table
+       - Completion status as open/closed state
+       - Due dates preserved
+       - Section label assigned for filtering
+     - Save migration state after each successful creation
+5. **Rate Limiting** - 100ms delay between issue creation to avoid API throttling
+6. **Save Final State** - Persists migration state to disk for future runs
+
+### Gitea API Limitation
+**Important**: Gitea 1.24.6 does not have API support for project boards. Project board APIs are planned for Gitea 1.26.0.
+
+**Workaround**:
+- Issues are tagged with section labels during migration
+- Users can filter issues by label in Gitea's web UI
+- Filtered issues can then be manually bulk-assigned to project boards created in the web interface
+
+This approach preserves section organization while working within the API limitations of Gitea 1.24.6.
+
+### Duplicate Detection
+**Important**: The migration tool implements duplicate detection to safely handle re-runs and partial failures.
+
+**Strategy** (Hybrid approach):
+1. **State File Check (Fast)**: Maintains `migration-state.json` tracking all migrated tasks with:
+   - Asana task GID
+   - Gitea issue number
+   - Migration timestamp
+   - Export file name
+
+2. **Body Parsing Check (Reliable)**: Parses existing Gitea issues for Asana IDs:
+   - Fetches all issues via Gitea API
+   - Extracts Asana ID from issue body using regex: `/\*\*Asana ID\*\*:\s*(\d+)/`
+   - Builds Set of existing Asana task IDs
+   - Detects manually created or previously migrated issues
+
+**Benefits**:
+- Safe to re-run migration multiple times
+- Recovers from partial failures automatically
+- Fast re-runs (state file provides quick lookup)
+- Reliable detection (body parsing catches all cases)
+- Preserves crash recovery (saves state after each issue)
 
 ### User Mapping
 The `user-mapping.ts` utility maps Asana user names to Gitea emails. Mapping is done by matching substrings of the Asana user's name against the email prefix in the mapping table.
@@ -118,7 +162,8 @@ bun run lint && bun run format:check && bun test && bun run type-check
 
 ## Migration Requirements
 
-1. **One-to-One Mapping**: Each JSON file in `exports/` should create one Gitea project
-2. **Task Import**: All tasks from each Asana project must be imported as Gitea issues
+1. **Task Import**: All tasks from each Asana project must be imported as Gitea issues
+2. **Section Labels**: Create labels for each Asana section with consistent color coding
 3. **User Mapping**: Apply the user mapping when setting assignees
 4. **Preserve Metadata**: Maintain completion status, due dates, descriptions, and other task metadata where Gitea supports it
+5. **Post-Migration Organization**: Users manually create project boards and bulk-assign labeled issues via Gitea's web UI
