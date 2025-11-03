@@ -78,7 +78,7 @@ describe("convertTaskToIssue", () => {
     expect(result.body).toContain("User1");
     expect(result.body).toContain("In Progress");
     expect(result.closed).toBe(false);
-    expect(result.assignees).toEqual(["user1@gitea.com"]);
+    expect(result.assignees).toEqual(["user1"]);
     expect(result.due_date).toBe("2025-12-31T23:59:59Z");
   });
 
