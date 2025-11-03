@@ -37,3 +37,4 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Project-specific ignores
 exports/*.json
 usermapping.json
+migration-state.json
