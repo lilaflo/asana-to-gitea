@@ -1,7 +1,15 @@
 import { GiteaClient } from "./gitea/client.ts";
 import type { AsanaExport, AsanaTask } from "./types/asana.ts";
 import type { Config } from "./types/config.ts";
+import type { MigrationState, MigrationTask } from "./types/migration.ts";
 import { convertTaskToIssue, groupTasksBySection } from "./utils/task-converter.ts";
+import {
+  loadMigrationState,
+  saveMigrationState,
+  isTaskMigrated,
+  addMigratedTask,
+} from "./utils/migration-state.ts";
+import { buildExistingAsanaIdsSet } from "./utils/duplicate-detector.ts";
 import * as path from "path";
 
 export class AsanaToGiteaMigrator {
@@ -105,7 +113,7 @@ export class AsanaToGiteaMigrator {
   /**
    * Migrate a single export file to a Gitea project
    */
-  async migrateExport(filePath: string): Promise<void> {
+  async migrateExport(filePath: string, migrationState: MigrationState): Promise<void> {
     console.debug(`\nMigrating: ${filePath}`);
 
     // Load the export
@@ -122,51 +130,173 @@ export class AsanaToGiteaMigrator {
 
     console.debug(`Project: ${projectName} (${tasks.length} tasks)`);
 
-    // Find existing project by name or create new one
-    let projectId: number | undefined;
-    try {
-      const projects = await this.client.getProjects();
-      const existingProject = projects.find((p) => p.title === projectName);
-
-      if (existingProject) {
-        projectId = existingProject.id;
-        console.debug(`Using existing project: ${existingProject.title} (ID: ${projectId})`);
-      } else {
-        const project = await this.client.createProject({
-          title: projectName,
-          body: `Migrated from Asana export: ${path.basename(filePath)}`,
-        });
-        projectId = project.id;
-        console.debug(`Created new project: ${project.title} (ID: ${projectId})`);
-      }
-    } catch (error) {
-      console.error(`Failed to get/create project:`, error);
-      console.debug(`Will create issues without project assignment`);
-    }
+    // Load existing issues from Gitea to check for duplicates
+    console.debug("Checking for existing issues...");
+    const existingIssues = await this.client.getIssues("all");
+    const existingAsanaIds = buildExistingAsanaIdsSet(existingIssues);
+    console.debug(`Found ${existingAsanaIds.size} previously migrated tasks in Gitea`);
 
     // Group tasks by section
     const tasksBySection = groupTasksBySection(tasks);
     console.debug(`Found ${tasksBySection.size} sections`);
 
+    // Create "asana" label for all imported issues
+    let asanaLabelId: number | undefined;
+    try {
+      const existingLabels = await this.client.getLabels();
+      const asanaLabel = existingLabels.find((l) => l.name === "asana");
+
+      if (asanaLabel) {
+        asanaLabelId = asanaLabel.id;
+        console.debug('Label "asana" already exists');
+      } else {
+        const label = await this.client.createLabel({
+          name: "asana",
+          color: "1d76db",
+          description: "Imported from Asana",
+        });
+        asanaLabelId = label.id;
+        console.debug('Created label "asana"');
+      }
+    } catch (error) {
+      console.error("Failed to create asana label:", error);
+    }
+
+    // Create "Project: <NAME>" label
+    let projectLabelId: number | undefined;
+    try {
+      const projectLabelName = `Project: ${projectName}`;
+      const existingLabels = await this.client.getLabels();
+      const projectLabel = existingLabels.find((l) => l.name === projectLabelName);
+
+      if (projectLabel) {
+        projectLabelId = projectLabel.id;
+        console.debug(`Label "${projectLabelName}" already exists`);
+      } else {
+        const label = await this.client.createLabel({
+          name: projectLabelName,
+          color: "0e8a16",
+          description: `Tasks from Asana project: ${projectName}`,
+        });
+        projectLabelId = label.id;
+        console.debug(`Created label "${projectLabelName}"`);
+      }
+    } catch (error) {
+      console.error(`Failed to create project label for ${projectName}:`, error);
+    }
+
+    // Create labels for each section (skip generic/untitled sections)
+    const sectionLabelMap = new Map<string, number>();
+    const skipSectionLabels = ["Untitled section", "Uncategorized", "(no section)"];
+
+    for (const sectionName of tasksBySection.keys()) {
+      // Skip creating labels for generic section names
+      if (skipSectionLabels.includes(sectionName)) {
+        console.debug(`Skipping label creation for generic section: ${sectionName}`);
+        continue;
+      }
+
+      try {
+        const labelId = await this.createSectionLabel(sectionName);
+        sectionLabelMap.set(sectionName, labelId);
+      } catch (error) {
+        console.error(`Failed to create label for section ${sectionName}:`, error);
+      }
+    }
+
     // Migrate tasks as issues
     let successCount = 0;
     let failureCount = 0;
+    let skipCount = 0;
 
     for (const [sectionName, sectionTasks] of tasksBySection) {
       console.debug(`\nMigrating section: ${sectionName} (${sectionTasks.length} tasks)`);
+      const sectionLabelId = sectionLabelMap.get(sectionName);
 
       for (const task of sectionTasks) {
+        // Check if task already migrated (state file check - fast)
+        if (isTaskMigrated(migrationState, task.gid)) {
+          console.debug(`  ⊘ Skipped (in state): ${task.name}`);
+          skipCount++;
+          continue;
+        }
+
+        // Check if task exists in Gitea (body parsing check - reliable)
+        if (existingAsanaIds.has(task.gid)) {
+          console.debug(`  ⊘ Skipped (in Gitea): ${task.name}`);
+          skipCount++;
+
+          // Update state to include this task for future runs
+          const existingIssue = existingIssues.find((issue) => {
+            const asanaId = issue.body?.match(/\*\*Asana ID\*\*:\s*(\d+)/)?.[1];
+            return asanaId === task.gid;
+          });
+
+          if (existingIssue) {
+            addMigratedTask(migrationState, path.basename(filePath), {
+              asanaGid: task.gid,
+              giteaIssueNumber: existingIssue.number,
+              title: task.name,
+              migratedAt: new Date().toISOString(),
+            });
+          }
+          continue;
+        }
+
+        // Create new issue
         try {
           const issueRequest = convertTaskToIssue(task, this.config.userMappings);
 
-          // Assign to project board
-          if (projectId) {
-            issueRequest.project = projectId;
+          // Initialize labels array
+          issueRequest.labels = issueRequest.labels || [];
+
+          // Add "asana" label
+          if (asanaLabelId) {
+            issueRequest.labels.push(asanaLabelId);
           }
 
-          const issue = await this.client.createIssue(issueRequest);
+          // Add "Project: <NAME>" label
+          if (projectLabelId) {
+            issueRequest.labels.push(projectLabelId);
+          }
+
+          // Add section label for filtering
+          if (sectionLabelId) {
+            issueRequest.labels.push(sectionLabelId);
+          }
+
+          let issue;
+          try {
+            issue = await this.client.createIssue(issueRequest);
+          } catch (error) {
+            // If assignee doesn't exist, retry without assignee
+            if (
+              error instanceof Error &&
+              error.message.includes("Assignee does not exist")
+            ) {
+              console.debug(
+                `  ⚠ Assignee not found for task "${task.name}", creating issue without assignee`
+              );
+              issueRequest.assignees = undefined;
+              issue = await this.client.createIssue(issueRequest);
+            } else {
+              throw error;
+            }
+          }
+
           console.debug(`  ✓ Created issue #${issue.number}: ${issue.title}`);
           successCount++;
+
+          // Add to migration state
+          addMigratedTask(migrationState, path.basename(filePath), {
+            asanaGid: task.gid,
+            giteaIssueNumber: issue.number,
+            title: task.name,
+            migratedAt: new Date().toISOString(),
+          });
+
+          // Save state after each successful creation (for crash recovery)
+          await saveMigrationState(migrationState);
 
           // Rate limiting - wait a bit between requests
           await Bun.sleep(100);
@@ -177,19 +307,28 @@ export class AsanaToGiteaMigrator {
       }
     }
 
-    console.debug(`\nMigration complete: ${successCount} succeeded, ${failureCount} failed`);
+    console.debug(
+      `\nMigration complete: ${successCount} created, ${skipCount} skipped, ${failureCount} failed`
+    );
   }
 
   /**
    * Migrate all exports
    */
   async migrateAll(): Promise<void> {
+    // Load migration state
+    const migrationState = await loadMigrationState();
+    console.debug(`Loaded migration state (${migrationState.exports.length} previous exports)`);
+
     const files = await this.getExportFiles();
     console.debug(`Found ${files.length} export files\n`);
 
     for (const file of files) {
-      await this.migrateExport(file);
+      await this.migrateExport(file, migrationState);
     }
+
+    // Save final state
+    await saveMigrationState(migrationState);
 
     console.debug("\n✓ All migrations complete!");
   }

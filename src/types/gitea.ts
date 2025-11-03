@@ -45,7 +45,6 @@ export interface GiteaCreateIssueRequest {
   closed?: boolean;
   labels?: number[];
   due_date?: string;
-  project?: number; // Project board ID
 }
 
 export interface GiteaLabel {
