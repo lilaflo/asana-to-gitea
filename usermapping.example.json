@@ -1,10 +1,10 @@
 [
   {
     "asanaEmail": "user1@asana.com",
-    "giteaEmail": "user1@gitea.com"
+    "giteaUsername": "user1"
   },
   {
     "asanaEmail": "user2@asana.com",
-    "giteaEmail": "user2@gitea.com"
+    "giteaUsername": "user2"
   }
 ]

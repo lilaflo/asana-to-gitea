@@ -3,7 +3,7 @@ import type { AsanaUser } from "../types/asana.ts";
 import * as path from "path";
 
 /**
- * Maps an Asana user email to a Gitea user email
+ * Maps an Asana user to a Gitea username
  */
 export function mapAsanaUserToGitea(
   asanaUser: AsanaUser | null,
@@ -20,7 +20,7 @@ export function mapAsanaUserToGitea(
   for (const mapping of mappings) {
     const asanaEmailPrefix = mapping.asanaEmail.split("@")[0].toLowerCase();
     if (lowerName.includes(asanaEmailPrefix)) {
-      return mapping.giteaEmail;
+      return mapping.giteaUsername;
     }
   }
 

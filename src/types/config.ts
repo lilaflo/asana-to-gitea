@@ -4,7 +4,7 @@
 
 export interface UserMapping {
   asanaEmail: string;
-  giteaEmail: string;
+  giteaUsername: string;
 }
 
 export interface Config {
